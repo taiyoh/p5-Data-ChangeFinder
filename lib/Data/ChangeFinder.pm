@@ -5,7 +5,7 @@ use warnings;
 
 use Math::Matrix;
 use Math::Trig 'pi';
-use List::Util qw/max sum reduce/;
+use List::Util qw/max sum/;
 
 use Data::Dumper;
 
@@ -32,7 +32,6 @@ sub next {
 
     # update mu
     $self->{mu} = (1 - $r) * $self->{mu} + $r * $x;
-warn "mu: $self->{mu}\n";
 
     # update $self->{c}
     my $c = $self->{c};
@@ -46,21 +45,18 @@ warn "mu: $self->{mu}\n";
     my $cc = _zero_matrix($self->{term});
 
     for my $j (0 .. ($self->{term} - 1)) {
-        for my $i (0 .. ($self->{term} - 1)) {
+        for my $i ($j .. ($self->{term} - 1)) {
             $cc->[$j][$i] = $cc->[$i][$j] = $c->[$i - $j];
         }
     }
     my $_c_vec = Math::Matrix->new($c);
-    my $w = Math::Matrix->new(@$cc)->invert->multiply($_c_vec->transpose);
+    my $w = Math::Matrix->new(@$cc)->invert * $_c_vec->transpose;
     my $xt = $self->{mu};
     my $_idx = 0;
     for my $v (@{ $self->{data} }) {
-warn "inject: " . $w->[$_idx++][0] * ($v - $self->{mu}). "\n";
         $xt += $w->[$_idx++][0] * ($v - $self->{mu});
     }
-warn "sum: $xt\n";
     $self->{sigma} = (1 - $r) * $self->{sigma} + $r * (($x - $xt) * ($x - $xt));
-warn "sigma: $self->{sigma}\n";
 
     push @{ $self->{data} }, $x;
     shift @{ $self->{data} } if scalar(@{ $self->{data} }) > $self->{term};
@@ -74,10 +70,7 @@ sub smooth {
     my $_end = @{ $self->{data} };
     my $_begin = max($_end - $size, 0);
     my @list = splice @{ $self->{data} }, $_begin, $_end;
-    my $ret = 0;
-    for my $v (@list) {
-        $ret += $v;
-    }
+    my $ret = sum(@list) || 0;
     return $ret / ($_end - $_begin);
 }
 
