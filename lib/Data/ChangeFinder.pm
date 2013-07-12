@@ -5,7 +5,9 @@ use warnings;
 
 use Math::Matrix;
 use Math::Trig 'pi';
-use List::Util 'max';
+use List::Util qw/max sum reduce/;
+
+use Data::Dumper;
 
 our $VERSION = "0.01";
 
@@ -25,19 +27,19 @@ sub new {
 sub next {
     my ($self, $x) = @_;
 
-    my $len = @{ $self->{data} };
+    my $len = scalar @{ $self->{data} };
     my $r   = $self->{r};
 
     # update mu
     $self->{mu} = (1 - $r) * $self->{mu} + $r * $x;
+warn "mu: $self->{mu}\n";
 
-    # update c
-    my $_c = $self->{c};
+    # update $self->{c}
+    my $c = $self->{c};
     my $data = $self->{data};
-
     for my $j (0 .. ($self->{term} - 1)) {
-        if ($data->[$len - 1 - $j]) {
-            $_c->[$j] = (1 - $r) * $_c->[$j] + $r * ($x - $self->{mu}) * $data->[$len - 1 - $j] - $self->{mu};
+        if (my $_d = $data->[$len - 1 - $j]) {
+            $c->[$j] = (1 - $r) * $c->[$j] + $r * ($x - $self->{mu}) * ($_d - $self->{mu});
         }
     }
 
@@ -45,21 +47,25 @@ sub next {
 
     for my $j (0 .. ($self->{term} - 1)) {
         for my $i (0 .. ($self->{term} - 1)) {
-            $cc->[$j][$i] = $cc->[$i][$j] = $_c->[$i - $j];
+            $cc->[$j][$i] = $cc->[$i][$j] = $c->[$i - $j];
         }
     }
-    my $_c_vec = Math::Matrix->new($_c);
+    my $_c_vec = Math::Matrix->new($c);
     my $w = Math::Matrix->new(@$cc)->invert->multiply($_c_vec->transpose);
-    my $xt = my $idx = 0;
+    my $xt = $self->{mu};
+    my $_idx = 0;
     for my $v (@{ $self->{data} }) {
-        $xt += $w->[$idx++] * ($v - $self->{mu});
+warn "inject: " . $w->[$_idx++][0] * ($v - $self->{mu}). "\n";
+        $xt += $w->[$_idx++][0] * ($v - $self->{mu});
     }
-    $self->{sigma} = (1 - $self->{r}) * $self->{sigma} + $self->{r} * ($x - $xt) * ($x - $xt);
+warn "sum: $xt\n";
+    $self->{sigma} = (1 - $r) * $self->{sigma} + $r * (($x - $xt) * ($x - $xt));
+warn "sigma: $self->{sigma}\n";
 
     push @{ $self->{data} }, $x;
     shift @{ $self->{data} } if scalar(@{ $self->{data} }) > $self->{term};
 
-    return _scope(_prob($xt, $self->{sigma}, $x));
+    return _score(_prob($xt, $self->{sigma}, $x));
 }
 
 sub smooth {
